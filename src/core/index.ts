@@ -3,7 +3,7 @@
  * статкритерии (через Pyodide) и генератор экспертного заключения.
  */
 
-export const CORE_VERSION = '0.4.2';
+export const CORE_VERSION = '0.5.0';
 
 export {
   parseScattPdf,
