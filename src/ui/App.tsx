@@ -6,6 +6,8 @@ import {
   type ScattExportResult,
 } from '@core/index';
 import { Stats } from './Stats';
+import { Correlations } from './Correlations';
+import { ExplainResult } from './ExplainResult';
 
 interface Props {
   shell: Shell;
@@ -90,7 +92,13 @@ export function App({ shell }: Props) {
         {parse.status === 'done' && (
           <>
             <ParseResult result={parse.result} />
-            {parse.result.shots.length > 0 && <Stats shots={parse.result.shots} />}
+            {parse.result.shots.length > 0 && (
+              <>
+                <Correlations shots={parse.result.shots} />
+                <ExplainResult shots={parse.result.shots} />
+                <Stats shots={parse.result.shots} />
+              </>
+            )}
           </>
         )}
       </section>

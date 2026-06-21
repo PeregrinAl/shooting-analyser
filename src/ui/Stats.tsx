@@ -433,6 +433,12 @@ function GroupingTable({
   );
 }
 
+/** Целое df показываем как «8», дробное (Welch) — с десятичной «7.8». */
+function formatDf(value: number): string {
+  const rounded = Math.round(value);
+  return Math.abs(value - rounded) < 1e-9 ? String(rounded) : value.toFixed(1);
+}
+
 const TEST_LABELS: Record<'anova' | 'welch' | 'kruskal', string> = {
   'anova': 'ANOVA (Fisher)',
   'welch': 'ANOVA (Welch)',
@@ -496,7 +502,7 @@ function ComparisonPanel({
         {comparison.test === 'kruskal' ? 'H' : 'F'}&nbsp;=&nbsp;
         {comparison.statistic.toFixed(3)}
         {Number.isFinite(comparison.dfBetween) && Number.isFinite(comparison.dfWithin)
-          ? ` (df ${comparison.dfBetween.toFixed(0)}/${comparison.dfWithin.toFixed(1)})`
+          ? ` (df ${comparison.dfBetween.toFixed(0)}/${formatDf(comparison.dfWithin)})`
           : Number.isFinite(comparison.dfBetween)
             ? ` (df = ${comparison.dfBetween.toFixed(0)})`
             : ''}

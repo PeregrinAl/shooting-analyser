@@ -271,3 +271,75 @@ code {
   color: #c4710a;
   font-weight: 500;
 }
+
+.corr {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.corr__hint {
+  margin: 0 0 1rem;
+  font-size: .85rem;
+  color: var(--muted);
+}
+
+.corr__list {
+  margin: 1rem 0 0;
+  padding-left: 1.25rem;
+  font-size: .9rem;
+  line-height: 1.6;
+}
+
+.corr__item {
+  margin-bottom: .25rem;
+}
+
+.explain {
+  margin-top: 2rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.explain__block {
+  margin-bottom: 2rem;
+}
+
+.explain__hint {
+  margin: 0 0 1rem;
+  font-size: .85rem;
+  color: var(--muted);
+}
+
+.explain__summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: .25rem 1.5rem;
+  margin: 0 0 1.25rem;
+  font-size: .95rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.explain__summary > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: .35rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.explain__summary dt {
+  color: var(--muted);
+}
+
+.explain__summary dd {
+  margin: 0;
+}
+
+.explain__muted {
+  color: var(--muted);
+}
+
+.explain__coeffs {
+  margin-top: .5rem;
+}
