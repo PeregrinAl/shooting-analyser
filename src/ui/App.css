@@ -217,3 +217,24 @@ code {
   color: var(--muted);
   margin-bottom: .5rem;
 }
+
+.stats__verdict {
+  margin: 0 0 1.5rem;
+  padding: .65rem .8rem;
+  border-radius: 6px;
+  font-size: .9rem;
+  border-left: 3px solid var(--border);
+  background: rgba(127, 127, 127, .08);
+}
+
+.stats__verdict--ok {
+  border-left-color: #1c8a3e;
+}
+
+.stats__verdict--warn {
+  border-left-color: #c4710a;
+}
+
+.stats__verdict--muted {
+  color: var(--muted);
+}

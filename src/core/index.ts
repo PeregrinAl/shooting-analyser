@@ -3,7 +3,7 @@
  * статкритерии (через Pyodide) и генератор экспертного заключения.
  */
 
-export const CORE_VERSION = '0.3.1';
+export const CORE_VERSION = '0.3.2';
 
 export {
   parseScattPdf,
@@ -21,3 +21,10 @@ export {
   type PyodideLoadStatus,
   type LoadOptions as PyodideLoadOptions,
 } from './stats/runtime';
+
+export {
+  shapiroWilk,
+  decideNormality,
+  type ShapiroResult,
+  type NormalityVerdict,
+} from './stats/tests';

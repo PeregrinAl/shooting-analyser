@@ -13,9 +13,12 @@ import {
 } from 'recharts';
 import {
   describe,
+  shapiroWilk,
+  decideNormality,
   type Descriptives,
   type PyodideLoadStatus,
   type ScattShot,
+  type ShapiroResult,
 } from '@core/index';
 
 /**
@@ -57,14 +60,17 @@ interface Props {
 export function Stats({ shots }: Props) {
   const [varKey, setVarKey] = useState<VarKey>('R');
   const [pyStatus, setPyStatus] = useState<PyodideLoadStatus>('idle');
-  // Кэш описательной статистики по переменной — чтобы переключать табы
-  // мгновенно после первого расчёта.
-  const [cache, setCache] = useState<Map<VarKey, Descriptives>>(new Map());
+  // Кэш сводок по переменной — чтобы переключать табы мгновенно после
+  // первого расчёта. Считаем сразу всё, что нужно для одной переменной:
+  // описательную статистику и критерий нормальности.
+  const [cache, setCache] = useState<Map<VarKey, CacheEntry>>(new Map());
   const [error, setError] = useState<string | null>(null);
 
   const variable = VARIABLES.find((v) => v.key === varKey)!;
   const values = useMemo(() => pickValues(shots, varKey), [shots, varKey]);
-  const desc = cache.get(varKey);
+  const entry = cache.get(varKey);
+  const desc = entry?.desc;
+  const shapiro = entry?.shapiro;
 
   // При смене серии (например, открыли другой PDF) сбрасываем кэш — иначе
   // UI покажет старые числа, потому что cache.has(varKey) останется true.
@@ -73,16 +79,19 @@ export function Stats({ shots }: Props) {
     setError(null);
   }, [shots]);
 
-  // Каждый раз при смене переменной — если статистики для неё ещё нет,
-  // запускаем расчёт через Pyodide.
+  // Каждый раз при смене переменной — если сводки для неё ещё нет,
+  // считаем сразу всё через Pyodide одной транзакцией.
   useEffect(() => {
     if (cache.has(varKey)) return;
     let cancelled = false;
     setError(null);
-    describe(values, { onStatus: (s) => !cancelled && setPyStatus(s) })
-      .then((d) => {
+    Promise.all([
+      describe(values, { onStatus: (s) => !cancelled && setPyStatus(s) }),
+      shapiroWilk(values),
+    ])
+      .then(([d, sh]) => {
         if (cancelled) return;
-        setCache((prev) => new Map(prev).set(varKey, d));
+        setCache((prev) => new Map(prev).set(varKey, { desc: d, shapiro: sh }));
       })
       .catch((e) => {
         if (cancelled) return;
@@ -127,6 +136,7 @@ export function Stats({ shots }: Props) {
       {desc && (
         <>
           <DescTable desc={desc} unit={variable.unit} />
+          {shapiro && <NormalityRow shapiro={shapiro} />}
           <Histogram values={values} label={variable.label} unit={variable.unit} />
           <BoxPlot desc={desc} unit={variable.unit} />
           <ScatterByShot
@@ -138,6 +148,35 @@ export function Stats({ shots }: Props) {
         </>
       )}
     </section>
+  );
+}
+
+interface CacheEntry {
+  desc: Descriptives;
+  shapiro: ShapiroResult;
+}
+
+/** Строка-вывод критерия нормальности под таблицей descriptives. */
+function NormalityRow({ shapiro }: { shapiro: ShapiroResult }) {
+  const v = decideNormality(shapiro.p);
+  if (shapiro.n < 3 || !Number.isFinite(shapiro.p)) {
+    return (
+      <p className="stats__verdict stats__verdict--muted">
+        Шапиро-Уилк: n&nbsp;=&nbsp;{shapiro.n}, выборка слишком мала.
+      </p>
+    );
+  }
+  const cls = v.consistentWithNormal
+    ? 'stats__verdict stats__verdict--ok'
+    : 'stats__verdict stats__verdict--warn';
+  const verdictText = v.consistentWithNormal
+    ? 'распределение совместимо с нормальным'
+    : 'распределение значимо отличается от нормального';
+  return (
+    <p className={cls}>
+      <strong>Шапиро-Уилк</strong>: W&nbsp;=&nbsp;{shapiro.W.toFixed(3)},
+      p&nbsp;=&nbsp;{shapiro.p.toFixed(3)} (α&nbsp;=&nbsp;{v.alpha}) — {verdictText}.
+    </p>
   );
 }
 
