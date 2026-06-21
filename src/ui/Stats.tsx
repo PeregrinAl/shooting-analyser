@@ -15,7 +15,23 @@ import {
   describe,
   shapiroWilk,
   decideNormality,
+  levene,
+  decideVariance,
+  oneWayAnova,
+  welchAnova,
+  kruskalWallis,
+  decideMeans,
+  tukeyHsd,
+  dunnHolm,
+  chooseGroupTest,
+  getGroups,
+  GROUPING_LABELS,
   type Descriptives,
+  type GroupingScheme,
+  type GroupMeanResult,
+  type PairwiseResult,
+  type VarianceResult,
+  type Decision,
   type PyodideLoadStatus,
   type ScattShot,
   type ShapiroResult,
@@ -46,11 +62,15 @@ const VARIABLES: { key: VarKey; label: string; unit: string }[] = [
 
 /** Достать массив значений переменной из выстрелов, для удобства расчёта. */
 function pickValues(shots: readonly ScattShot[], key: VarKey): number[] {
+  return shots.map(shotValueGetter(key));
+}
+
+/** Единый getter, который проценты разворачивает в шкалу 0..100. */
+function shotValueGetter(key: VarKey): (s: ScattShot) => number {
   if (key === 'hold10' || key === 'hold10plus') {
-    // Доли SCATT отдаёт от 0 до 1; для UI и статистики используем %.
-    return shots.map((s) => s[key] * 100);
+    return (s) => s[key] * 100;
   }
-  return shots.map((s) => s[key]);
+  return (s) => s[key] as number;
 }
 
 interface Props {
@@ -59,6 +79,8 @@ interface Props {
 
 export function Stats({ shots }: Props) {
   const [varKey, setVarKey] = useState<VarKey>('R');
+  const [scheme, setScheme] = useState<GroupingScheme>('all');
+  const [splitByVar, setSplitByVar] = useState<VarKey>('R');
   const [pyStatus, setPyStatus] = useState<PyodideLoadStatus>('idle');
   // Кэш сводок по переменной — чтобы переключать табы мгновенно после
   // первого расчёта. Считаем сразу всё, что нужно для одной переменной:
@@ -137,6 +159,23 @@ export function Stats({ shots }: Props) {
         <>
           <DescTable desc={desc} unit={variable.unit} />
           {shapiro && <NormalityRow shapiro={shapiro} />}
+
+          <GroupingPicker
+            scheme={scheme}
+            onChange={setScheme}
+            splitByVar={splitByVar}
+            onSplitByChange={setSplitByVar}
+          />
+          {scheme !== 'all' && (
+            <GroupingTable
+              shots={shots}
+              varKey={varKey}
+              scheme={scheme}
+              splitByVar={splitByVar}
+              unit={variable.unit}
+            />
+          )}
+
           <Histogram values={values} label={variable.label} unit={variable.unit} />
           <BoxPlot desc={desc} unit={variable.unit} />
           <ScatterByShot
@@ -148,6 +187,371 @@ export function Stats({ shots }: Props) {
         </>
       )}
     </section>
+  );
+}
+
+function GroupingPicker({
+  scheme,
+  onChange,
+  splitByVar,
+  onSplitByChange,
+}: {
+  scheme: GroupingScheme;
+  onChange: (s: GroupingScheme) => void;
+  splitByVar: VarKey;
+  onSplitByChange: (v: VarKey) => void;
+}) {
+  const schemes: GroupingScheme[] = ['all', 'halves', 'thirds', 'median-split'];
+  return (
+    <>
+      <div className="stats__group-picker">
+        <span className="stats__group-label">Группировка:</span>
+        {schemes.map((s) => (
+          <button
+            key={s}
+            type="button"
+            onClick={() => onChange(s)}
+            className={
+              'stats__chip' + (s === scheme ? ' stats__chip--active' : '')
+            }
+          >
+            {GROUPING_LABELS[s]}
+          </button>
+        ))}
+      </div>
+      {scheme === 'median-split' && (
+        <div className="stats__group-picker">
+          <span className="stats__group-label">Делить по медиане:</span>
+          {VARIABLES.map((v) => (
+            <button
+              key={v.key}
+              type="button"
+              onClick={() => onSplitByChange(v.key)}
+              className={
+                'stats__chip' +
+                (v.key === splitByVar ? ' stats__chip--active' : '')
+              }
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+interface GroupRow {
+  label: string;
+  n: number;
+  mean: number;
+  std: number;
+  shapiroP: number;
+  consistentWithNormal: boolean | null;
+}
+
+interface GroupAnalysis {
+  rows: GroupRow[];
+  levene: VarianceResult;
+  decision: Decision;
+  comparison: GroupMeanResult | null;
+  /** Post-hoc парные сравнения. null если k<3 или основной тест незначим. */
+  pairwise: PairwiseResult | null;
+}
+
+function GroupingTable({
+  shots,
+  varKey,
+  scheme,
+  splitByVar,
+  unit,
+}: {
+  shots: readonly ScattShot[];
+  varKey: VarKey;
+  scheme: GroupingScheme;
+  splitByVar: VarKey;
+  unit: string;
+}) {
+  const [analysis, setAnalysis] = useState<GroupAnalysis | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  // Вырожденный случай: анализируем ту же переменную, по которой делим.
+  // p будет около нуля, эффект — огромный, толку никакого. Показываем
+  // подсказку вместо аналитики.
+  const isDegenerate = scheme === 'median-split' && varKey === splitByVar;
+
+  // Считаем для каждой подгруппы descriptives + Shapiro параллельно, потом
+  // на основе нормальности+однородности выбираем критерий сравнения и
+  // запускаем его. Pyodide на этом этапе уже загружен.
+  useEffect(() => {
+    if (isDegenerate) {
+      setAnalysis(null);
+      setError(null);
+      return;
+    }
+    let cancelled = false;
+    setError(null);
+    setAnalysis(null);
+    const getter = shotValueGetter(varKey);
+    const splitVar = VARIABLES.find((v) => v.key === splitByVar);
+    const splitBy =
+      scheme === 'median-split' && splitVar
+        ? {
+            getter: shotValueGetter(splitByVar),
+            label: splitVar.label,
+            unit: splitVar.unit,
+          }
+        : undefined;
+    const groups = getGroups(shots, scheme, getter, splitBy);
+
+    (async () => {
+      try {
+        const perGroup = await Promise.all(
+          groups.map(async (g) => {
+            const [d, sh] = await Promise.all([
+              describe(g.values),
+              shapiroWilk(g.values),
+            ]);
+            return { group: g, desc: d, sh };
+          }),
+        );
+
+        const rows: GroupRow[] = perGroup.map(({ group, desc, sh }) => {
+          const verdict = decideNormality(sh.p);
+          return {
+            label: group.label,
+            n: desc.n,
+            mean: desc.mean,
+            std: desc.std,
+            shapiroP: sh.p,
+            consistentWithNormal:
+              sh.n < 3 || !Number.isFinite(sh.p)
+                ? null
+                : verdict.consistentWithNormal,
+          };
+        });
+
+        const valuesByGroup = groups.map((g) => g.values);
+        const lev = await levene(valuesByGroup);
+        const varVerdict = decideVariance(lev.p);
+
+        const decision = chooseGroupTest({
+          groupNormalityOrNull: rows.map((r) => r.consistentWithNormal),
+          varianceHomogeneousOrNull: varVerdict.homogeneousOrNull,
+          minGroupSize: Math.min(...rows.map((r) => r.n)),
+        });
+
+        let comparison: GroupMeanResult | null = null;
+        if (decision.test === 'anova') comparison = await oneWayAnova(valuesByGroup);
+        else if (decision.test === 'welch') comparison = await welchAnova(valuesByGroup);
+        else if (decision.test === 'kruskal') comparison = await kruskalWallis(valuesByGroup);
+
+        // Post-hoc парные — нужны только при k≥3 и значимом основном тесте.
+        // Для k=2 единственная пара уже покрыта основным тестом + Cohen's d.
+        let pairwise: PairwiseResult | null = null;
+        if (
+          comparison &&
+          comparison.k >= 3 &&
+          Number.isFinite(comparison.p) &&
+          comparison.p < 0.05
+        ) {
+          const groupLabels = groups.map((g) => g.label);
+          if (comparison.test === 'kruskal') {
+            pairwise = await dunnHolm(valuesByGroup, groupLabels);
+          } else {
+            pairwise = await tukeyHsd(valuesByGroup, groupLabels);
+          }
+        }
+
+        if (cancelled) return;
+        setAnalysis({ rows, levene: lev, decision, comparison, pairwise });
+      } catch (e) {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [shots, varKey, scheme, splitByVar, isDegenerate]);
+
+  if (isDegenerate) {
+    return (
+      <p className="stats__verdict stats__verdict--muted">
+        Группировка и анализируемая переменная совпадают — выберите для деления
+        другую переменную. (Иначе мы сравниваем R с R и получим p ≈ 0 без
+        содержательного смысла.)
+      </p>
+    );
+  }
+  if (error) return <p className="app__error">Ошибка по группам: {error}</p>;
+  if (!analysis) return <p className="app__status">Считаю по группам…</p>;
+  const { rows, levene: lev, decision, comparison, pairwise } = analysis;
+
+  return (
+    <>
+      <table className="parse-result__table stats__group-table">
+        <thead>
+          <tr>
+            <th>Группа</th>
+            <th>n</th>
+            <th>Среднее{unit ? `, ${unit}` : ''}</th>
+            <th>σ{unit ? `, ${unit}` : ''}</th>
+            <th>Шапиро p</th>
+            <th>Нормально?</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.label}>
+              <td>{r.label}</td>
+              <td>{r.n}</td>
+              <td>{r.mean.toFixed(2)}</td>
+              <td>{Number.isFinite(r.std) ? r.std.toFixed(2) : '—'}</td>
+              <td>{Number.isFinite(r.shapiroP) ? r.shapiroP.toFixed(3) : '—'}</td>
+              <td>
+                {r.consistentWithNormal === null
+                  ? '—'
+                  : r.consistentWithNormal
+                    ? 'да'
+                    : 'нет'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <ComparisonPanel
+        levene={lev}
+        decision={decision}
+        comparison={comparison}
+      />
+
+      {pairwise && <PairwiseTable pairwise={pairwise} unit={unit} />}
+    </>
+  );
+}
+
+const TEST_LABELS: Record<'anova' | 'welch' | 'kruskal', string> = {
+  'anova': 'ANOVA (Fisher)',
+  'welch': 'ANOVA (Welch)',
+  'kruskal': 'Краскел-Уоллис',
+};
+
+const EFFECT_LABELS: Record<GroupMeanResult['effectSizeKind'], string> = {
+  'eta-squared': 'η²',
+  'omega-squared': 'ω²',
+  'epsilon-squared': 'ε²',
+};
+
+function ComparisonPanel({
+  levene: lev,
+  decision,
+  comparison,
+}: {
+  levene: VarianceResult;
+  decision: Decision;
+  comparison: GroupMeanResult | null;
+}) {
+  if (decision.test === 'insufficient' || !comparison) {
+    return (
+      <p className="stats__verdict stats__verdict--muted">
+        Сравнение групп: {decision.reason}.
+      </p>
+    );
+  }
+
+  const varVerdict = decideVariance(lev.p);
+  const meansVerdict = decideMeans(comparison.p);
+  const cls = meansVerdict.differs
+    ? 'stats__verdict stats__verdict--warn'
+    : 'stats__verdict stats__verdict--ok';
+  const verdictText = meansVerdict.differs
+    ? 'между группами есть статистически значимые различия'
+    : 'значимых различий между группами не выявлено';
+
+  return (
+    <div className="stats__comparison">
+      <h3 className="stats__comparison-title">Сравнение групп</h3>
+
+      <p className="stats__verdict stats__verdict--muted">
+        <strong>Левен</strong>: W&nbsp;=&nbsp;{lev.statistic.toFixed(3)},
+        p&nbsp;=&nbsp;{lev.p.toFixed(3)} (α&nbsp;=&nbsp;{varVerdict.alpha}) — дисперсии
+        {' '}
+        {varVerdict.homogeneousOrNull === null
+          ? 'не оценены'
+          : varVerdict.homogeneous
+            ? 'совместимы с однородными'
+            : 'значимо различаются'}
+        .
+      </p>
+
+      <p className="stats__verdict stats__verdict--muted">
+        <strong>Выбранный критерий</strong>: {TEST_LABELS[comparison.test]} — {decision.reason}.
+      </p>
+
+      <p className={cls}>
+        <strong>{TEST_LABELS[comparison.test]}</strong>:{' '}
+        {comparison.test === 'kruskal' ? 'H' : 'F'}&nbsp;=&nbsp;
+        {comparison.statistic.toFixed(3)}
+        {Number.isFinite(comparison.dfBetween) && Number.isFinite(comparison.dfWithin)
+          ? ` (df ${comparison.dfBetween.toFixed(0)}/${comparison.dfWithin.toFixed(1)})`
+          : Number.isFinite(comparison.dfBetween)
+            ? ` (df = ${comparison.dfBetween.toFixed(0)})`
+            : ''}
+        , p&nbsp;=&nbsp;{comparison.p.toFixed(3)} (α&nbsp;=&nbsp;{meansVerdict.alpha});
+        {' '}
+        размер эффекта {EFFECT_LABELS[comparison.effectSizeKind]}
+        &nbsp;=&nbsp;{comparison.effectSize.toFixed(3)}
+        {Number.isFinite(comparison.cohensD) && (
+          <>, Cohen&apos;s&nbsp;d&nbsp;=&nbsp;{comparison.cohensD.toFixed(2)}</>
+        )} — {verdictText}.
+      </p>
+    </div>
+  );
+}
+
+function PairwiseTable({
+  pairwise,
+  unit,
+}: {
+  pairwise: PairwiseResult;
+  unit: string;
+}) {
+  const label =
+    pairwise.test === 'tukey' ? 'Tukey HSD' : 'Данн с поправкой Холма';
+  return (
+    <div className="stats__comparison">
+      <h3 className="stats__comparison-title">Попарные сравнения ({label})</h3>
+      <table className="parse-result__table stats__group-table">
+        <thead>
+          <tr>
+            <th>Пара</th>
+            <th>
+              Разница{pairwise.test === 'dunn-holm' ? ' ср. рангов' : ''}
+              {unit && pairwise.test !== 'dunn-holm' ? `, ${unit}` : ''}
+            </th>
+            <th>p (скорр.)</th>
+            <th>Cohen&apos;s d</th>
+            <th>Значимо?</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pairwise.pairs.map((p, i) => (
+            <tr key={i}>
+              <td>{p.labelA} ↔ {p.labelB}</td>
+              <td>{Number.isFinite(p.meanDiff) ? p.meanDiff.toFixed(2) : '—'}</td>
+              <td>{Number.isFinite(p.pAdjusted) ? p.pAdjusted.toFixed(3) : '—'}</td>
+              <td>{Number.isFinite(p.cohensD) ? p.cohensD.toFixed(2) : '—'}</td>
+              <td className={p.significant ? 'stats__sig' : undefined}>
+                {p.significant ? 'да' : 'нет'}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 

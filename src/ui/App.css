@@ -238,3 +238,36 @@ code {
 .stats__verdict--muted {
   color: var(--muted);
 }
+
+.stats__group-picker {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .5rem;
+  margin: 1rem 0 .75rem;
+}
+
+.stats__group-label {
+  font-size: .85rem;
+  color: var(--muted);
+  margin-right: .25rem;
+}
+
+.stats__group-table {
+  margin-bottom: 1rem;
+}
+
+.stats__comparison {
+  margin: 1rem 0 1.5rem;
+}
+
+.stats__comparison-title {
+  margin: 0 0 .75rem;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.stats__sig {
+  color: #c4710a;
+  font-weight: 500;
+}
