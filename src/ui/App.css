@@ -88,3 +88,56 @@ code {
   padding: 0 .25em;
   border-radius: 3px;
 }
+
+.parse-result {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+}
+
+.parse-result__title {
+  margin: 0 0 1rem;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.parse-result__meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: .25rem 1rem;
+  margin: 0 0 1rem;
+  font-size: .9rem;
+}
+
+.parse-result__meta dt {
+  color: var(--muted);
+}
+
+.parse-result__meta dd {
+  margin: 0;
+}
+
+.parse-result__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .85rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.parse-result__table th,
+.parse-result__table td {
+  text-align: right;
+  padding: .35rem .5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.parse-result__table th:first-child,
+.parse-result__table td:first-child {
+  text-align: left;
+}
+
+.parse-result__table th {
+  color: var(--muted);
+  font-weight: 500;
+  border-bottom-width: 2px;
+}

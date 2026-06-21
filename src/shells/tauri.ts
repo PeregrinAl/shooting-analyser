@@ -14,6 +14,7 @@ export const tauriShell: Shell = {
     const selected = await open({
       multiple: false,
       filters: [
+        { name: 'Отчёт SCATT (PDF)', extensions: ['pdf'] },
         { name: 'SCATT Expert', extensions: ['scatt-expert'] },
         { name: 'Экспорт SCATT (HTML/текст)', extensions: ['html', 'htm', 'txt', 'csv'] },
         { name: 'Все файлы', extensions: ['*'] },

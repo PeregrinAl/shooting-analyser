@@ -9,7 +9,7 @@ export const webShell: Shell = {
   async pickFile(): Promise<PickedFile | null> {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.scatt-expert,.html,.htm,.txt,.csv';
+    input.accept = '.scatt-expert,.pdf,.html,.htm,.txt,.csv';
 
     const file = await new Promise<File | null>((resolve) => {
       input.addEventListener('change', () => resolve(input.files?.[0] ?? null), { once: true });
