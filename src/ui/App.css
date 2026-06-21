@@ -343,3 +343,42 @@ code {
 .explain__coeffs {
   margin-top: .5rem;
 }
+
+.conclusion {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(127, 127, 127, .06);
+}
+
+.conclusion__title {
+  margin: 0 0 1rem;
+  font-size: 1.25rem;
+  font-weight: 600;
+}
+
+.conclusion__section {
+  margin-bottom: 1.25rem;
+}
+
+.conclusion__section:last-child {
+  margin-bottom: 0;
+}
+
+.conclusion__heading {
+  margin: 0 0 .5rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.conclusion__p {
+  margin: 0 0 .5rem;
+  font-size: .95rem;
+  line-height: 1.55;
+}
+
+.conclusion__p:last-child {
+  margin-bottom: 0;
+}

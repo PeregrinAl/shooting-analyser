@@ -8,6 +8,7 @@ import {
 import { Stats } from './Stats';
 import { Correlations } from './Correlations';
 import { ExplainResult } from './ExplainResult';
+import { Conclusion } from './Conclusion';
 
 interface Props {
   shell: Shell;
@@ -94,6 +95,10 @@ export function App({ shell }: Props) {
             <ParseResult result={parse.result} />
             {parse.result.shots.length > 0 && (
               <>
+                <Conclusion
+                  shots={parse.result.shots}
+                  session={parse.result.session}
+                />
                 <Correlations shots={parse.result.shots} />
                 <ExplainResult shots={parse.result.shots} />
                 <Stats shots={parse.result.shots} />

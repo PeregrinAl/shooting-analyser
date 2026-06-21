@@ -3,7 +3,7 @@
  * статкритерии (через Pyodide) и генератор экспертного заключения.
  */
 
-export const CORE_VERSION = '0.4.1';
+export const CORE_VERSION = '0.4.2';
 
 export {
   parseScattPdf,
@@ -66,6 +66,13 @@ export {
   type MultipleRegression,
   type RegressionCoef,
 } from './stats/regression';
+
+export {
+  generateConclusion,
+  labelOf,
+  type ReportSection,
+  type ConclusionInput,
+} from './report/generate';
 
 export {
   getGroups,
