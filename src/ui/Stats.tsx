@@ -7,6 +7,9 @@ import {
   Tooltip,
   ResponsiveContainer,
   CartesianGrid,
+  ScatterChart,
+  Scatter,
+  ZAxis,
 } from 'recharts';
 import {
   describe,
@@ -125,6 +128,13 @@ export function Stats({ shots }: Props) {
         <>
           <DescTable desc={desc} unit={variable.unit} />
           <Histogram values={values} label={variable.label} unit={variable.unit} />
+          <BoxPlot desc={desc} unit={variable.unit} />
+          <ScatterByShot
+            shots={shots}
+            varKey={varKey}
+            label={variable.label}
+            unit={variable.unit}
+          />
         </>
       )}
     </section>
@@ -217,6 +227,137 @@ interface Bin {
   count: number;
   low: number;
   high: number;
+}
+
+/**
+ * Boxplot, простой SVG. Усы — от min до max (без outlier-маркеров Тьюки);
+ * для размеров выборок порядка 10–60 это читается так же хорошо, а кода меньше.
+ */
+function BoxPlot({ desc, unit }: { desc: Descriptives; unit: string }) {
+  // Ширина рисуется responsive, высота фиксирована — boxplot низкий.
+  const W = 600;
+  const H = 80;
+  const PAD = 20;
+  const innerW = W - 2 * PAD;
+
+  const { min, max, q1, q3, median } = desc;
+  if (!Number.isFinite(min) || min === max) {
+    return (
+      <div className="stats__chart">
+        <div className="stats__chart-title">Boxplot: нечего показывать (n &lt; 2 или константа)</div>
+      </div>
+    );
+  }
+  const toX = (v: number) => PAD + ((v - min) / (max - min)) * innerW;
+  const midY = H / 2;
+  const boxTop = midY - 18;
+  const boxBot = midY + 18;
+  const whiskerTop = midY - 10;
+  const whiskerBot = midY + 10;
+
+  return (
+    <div className="stats__chart">
+      <div className="stats__chart-title">Boxplot</div>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" height={H}>
+        {/* Ось */}
+        <line x1={PAD} y1={midY} x2={W - PAD} y2={midY} stroke="var(--border)" />
+        {/* Усы */}
+        <line x1={toX(min)} y1={midY} x2={toX(q1)} y2={midY} stroke="var(--fg)" />
+        <line x1={toX(q3)} y1={midY} x2={toX(max)} y2={midY} stroke="var(--fg)" />
+        <line x1={toX(min)} y1={whiskerTop} x2={toX(min)} y2={whiskerBot} stroke="var(--fg)" />
+        <line x1={toX(max)} y1={whiskerTop} x2={toX(max)} y2={whiskerBot} stroke="var(--fg)" />
+        {/* Коробка Q1..Q3 */}
+        <rect
+          x={toX(q1)}
+          y={boxTop}
+          width={toX(q3) - toX(q1)}
+          height={boxBot - boxTop}
+          fill="var(--accent)"
+          fillOpacity={0.25}
+          stroke="var(--accent)"
+        />
+        {/* Медиана */}
+        <line x1={toX(median)} y1={boxTop} x2={toX(median)} y2={boxBot} stroke="var(--accent)" strokeWidth={2} />
+        {/* Подписи min/max */}
+        <text x={toX(min)} y={H - 4} fontSize="11" textAnchor="middle" fill="var(--muted)">
+          {min.toFixed(1)}
+        </text>
+        <text x={toX(max)} y={H - 4} fontSize="11" textAnchor="middle" fill="var(--muted)">
+          {max.toFixed(1)}
+        </text>
+        {/* Подпись медианы */}
+        <text x={toX(median)} y={boxTop - 4} fontSize="11" textAnchor="middle" fill="var(--accent)">
+          {median.toFixed(1)}{unit ? ` ${unit}` : ''}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
+/**
+ * Точечный график: ось X — порядковый номер выстрела, ось Y — значение
+ * переменной. Помогает заметить дрейф/утомление по ходу серии.
+ */
+function ScatterByShot({
+  shots,
+  varKey,
+  label,
+  unit,
+}: {
+  shots: readonly ScattShot[];
+  varKey: VarKey;
+  label: string;
+  unit: string;
+}) {
+  const data = useMemo(() => {
+    const getter = (s: ScattShot): number =>
+      varKey === 'hold10' || varKey === 'hold10plus'
+        ? (s[varKey] as number) * 100
+        : (s[varKey] as number);
+    return shots.map((s) => ({ x: s.number, y: getter(s) }));
+  }, [shots, varKey]);
+
+  return (
+    <div className="stats__chart">
+      <div className="stats__chart-title">
+        По ходу серии: {label}
+        {unit ? `, ${unit}` : ''}
+      </div>
+      <ResponsiveContainer width="100%" height={220}>
+        <ScatterChart margin={{ top: 10, right: 16, bottom: 10, left: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+          <XAxis
+            type="number"
+            dataKey="x"
+            name="№"
+            domain={[1, 'dataMax']}
+            allowDecimals={false}
+            tick={{ fontSize: 12, fill: 'var(--muted)' }}
+            stroke="var(--border)"
+          />
+          <YAxis
+            type="number"
+            dataKey="y"
+            name={label}
+            tick={{ fontSize: 12, fill: 'var(--muted)' }}
+            stroke="var(--border)"
+          />
+          <ZAxis range={[48, 48]} />
+          <Tooltip
+            cursor={{ strokeDasharray: '3 3' }}
+            contentStyle={{
+              background: 'var(--bg)',
+              border: '1px solid var(--border)',
+              borderRadius: 6,
+            }}
+            labelStyle={{ color: 'var(--fg)' }}
+            formatter={(v: number) => v.toFixed(2)}
+          />
+          <Scatter data={data} fill="var(--accent)" />
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+  );
 }
 
 function buildBins(values: readonly number[]): Bin[] {

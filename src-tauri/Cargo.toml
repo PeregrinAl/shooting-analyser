@@ -1,6 +1,6 @@
 [package]
 name = "shooting-analyser"
-version = "0.3.0"
+version = "0.3.1"
 description = "Локальный инструмент дисперсионного анализа серий стрелковой подготовки."
 authors = ["shooting-analyser contributors"]
 edition = "2021"

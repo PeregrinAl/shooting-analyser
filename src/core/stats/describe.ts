@@ -22,6 +22,10 @@ export interface Descriptives {
   std: number;
   /** Межквартильный размах, линейная интерполяция. */
   iqr: number;
+  /** Первый квартиль (25%). */
+  q1: number;
+  /** Третий квартиль (75%). */
+  q3: number;
   min: number;
   max: number;
   /** Скос (несмещённый). NaN при n < 3. */
@@ -52,15 +56,20 @@ x = np.asarray(data_in, dtype=float)
 n = int(x.size)
 if n == 0:
     res = dict(n=0, mean=float('nan'), median=float('nan'), std=float('nan'),
-               iqr=float('nan'), min=float('nan'), max=float('nan'),
+               iqr=float('nan'), q1=float('nan'), q3=float('nan'),
+               min=float('nan'), max=float('nan'),
                skew=float('nan'), kurtosis=float('nan'))
 else:
+    q1 = float(np.quantile(x, 0.25, method='linear'))
+    q3 = float(np.quantile(x, 0.75, method='linear'))
     res = dict(
         n=n,
         mean=float(np.mean(x)),
         median=float(np.median(x)),
         std=float(np.std(x, ddof=1)) if n > 1 else float('nan'),
-        iqr=float(stats.iqr(x, interpolation='linear')),
+        iqr=q3 - q1,
+        q1=q1,
+        q3=q3,
         min=float(np.min(x)),
         max=float(np.max(x)),
         skew=float(stats.skew(x, bias=False)) if n > 2 else float('nan'),
