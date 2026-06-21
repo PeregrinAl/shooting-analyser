@@ -1,0 +1,26 @@
+[package]
+name = "shooting-analyser"
+version = "0.1.0"
+description = "Локальный инструмент дисперсионного анализа серий стрелковой подготовки."
+authors = ["shooting-analyser contributors"]
+edition = "2021"
+license = "MIT"
+
+# Имя бинарника в установщиках.
+[[bin]]
+name = "shooting-analyser"
+path = "src/main.rs"
+
+[lib]
+name = "shooting_analyser_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+serde_json = "1"
+serde = { version = "1", features = ["derive"] }
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-fs = "2"

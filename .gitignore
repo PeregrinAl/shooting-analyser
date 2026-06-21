@@ -1,0 +1,49 @@
+# Зависимости
+node_modules/
+.pnp
+.pnp.js
+
+# Сборка фронта
+dist/
+dist-ssr/
+*.local
+
+# Сборка Tauri/Rust
+src-tauri/target/
+src-tauri/gen/schemas/
+
+# Pyodide-кэш и WASM-артефакты разработки
+.pyodide-cache/
+
+# Тестовое покрытие
+coverage/
+.nyc_output/
+
+# Логи
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Редакторы и ОС
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Локальные настройки Claude Code (включая lock-файлы фоновых задач)
+.claude/
+
+# TypeScript build info — генерируются `tsc -b`
+*.tsbuildinfo
+
+# Тестовые файлы заказчика — собственность, не публикуем
+storage/
+
+# Сгенерированные иконки Tauri (после `tauri icon`)
+src-tauri/icons/*.icns
+src-tauri/icons/*.ico

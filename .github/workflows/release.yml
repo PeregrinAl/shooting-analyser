@@ -1,0 +1,85 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  # 1. Веб-сборка + загрузка артефакта для последующей публикации на Pages.
+  #    Сама публикация Pages делается отдельным репозиторием-сайтом (см. README),
+  #    поэтому здесь мы только производим артефакт.
+  web:
+    name: Веб-сборка
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Vite build
+        env:
+          VITE_BASE_PATH: /shooting-analyser/
+        run: npm run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: dist
+          if-no-files-found: error
+
+  # 2. Установщики под три ОС.
+  #    ВНИМАНИЕ: до первого релиза нужны иконки в src-tauri/icons/.
+  #    Сгенерируйте их командой `npm run tauri icon path/to/source.png`.
+  #    Без иконок шаг bundle упадёт.
+  desktop:
+    name: Установщики (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: macos-latest
+            args: '--target universal-apple-darwin'
+          - platform: ubuntu-latest
+            args: ''
+          - platform: windows-latest
+            args: ''
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Системные зависимости (Linux)
+        if: matrix.platform == 'ubuntu-latest'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: 'shooting-analyser ${{ github.ref_name }}'
+          releaseBody: 'См. CHANGELOG.md.'
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.args }}
