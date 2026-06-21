@@ -5,6 +5,7 @@ import {
   parseScattPdf,
   type ScattExportResult,
 } from '@core/index';
+import { Stats } from './Stats';
 
 interface Props {
   shell: Shell;
@@ -67,36 +68,31 @@ export function App({ shell }: Props) {
           Выбрать файл
         </button>
 
-        {file && (
-          <p className="app__status">
-            Получено <strong>{file.bytes.byteLength.toLocaleString('ru-RU')}</strong>&nbsp;байт
-            из файла <code>{file.name}</code>
-            {file.path && (
-              <>
-                {' '}
-                (<code title={file.path}>{file.path}</code>)
-              </>
-            )}
-            .
-          </p>
-        )}
-
         {error && <p className="app__error">Ошибка: {error}</p>}
 
-        {parse.status === 'parsing' && <p className="app__status">Разбираю PDF…</p>}
+        {parse.status === 'parsing' && (
+          <p className="app__status">Разбираю <code>{file?.name}</code>…</p>
+        )}
 
         {parse.status === 'unsupported' && (
           <p className="app__status">
-            Расширение <code>.{parse.extension}</code> пока не поддерживается.
-            На шаге 2 работаем только с PDF-отчётами SCATT.
+            Файл <code>{file?.name}</code>: расширение <code>.{parse.extension}</code>
+            {' '}пока не поддерживается. На шаге 2 работаем только с PDF-отчётами SCATT.
           </p>
         )}
 
         {parse.status === 'error' && (
-          <p className="app__error">Не удалось разобрать PDF: {parse.message}</p>
+          <p className="app__error">
+            Не удалось разобрать <code>{file?.name}</code>: {parse.message}
+          </p>
         )}
 
-        {parse.status === 'done' && <ParseResult result={parse.result} />}
+        {parse.status === 'done' && (
+          <>
+            <ParseResult result={parse.result} />
+            {parse.result.shots.length > 0 && <Stats shots={parse.result.shots} />}
+          </>
+        )}
       </section>
     </main>
   );
